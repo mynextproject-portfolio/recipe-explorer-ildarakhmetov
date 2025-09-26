@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from datetime import datetime
 from typing import List, Optional
 import uuid
@@ -22,10 +22,11 @@ class Recipe(BaseModel):
     # prep_time: int
     # cook_time: int
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict()
+    
+    @field_serializer('created_at', 'updated_at')
+    def serialize_datetime(self, value: datetime) -> str:
+        return value.isoformat()
 
 
 class RecipeCreate(BaseModel):
