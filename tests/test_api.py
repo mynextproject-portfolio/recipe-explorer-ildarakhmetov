@@ -22,17 +22,21 @@ def test_get_all_recipes(client, clean_storage):
     response = client.get("/api/recipes")
     assert response.status_code == 200
     data = response.json()
-    assert "recipes" in data
-    assert isinstance(data["recipes"], list)
+    assert data["success"] is True
+    assert "data" in data
+    assert "recipes" in data["data"]
+    assert isinstance(data["data"]["recipes"], list)
 
 
 def test_create_and_get_recipe(client, clean_storage, sample_recipe_data):
     """Contract test: Create recipe and verify response structure"""
     # Create recipe
     create_response = client.post("/api/recipes", json=sample_recipe_data)
-    assert create_response.status_code == 200
+    assert create_response.status_code == 201
     
-    recipe = create_response.json()
+    create_data = create_response.json()
+    assert create_data["success"] is True
+    recipe = create_data["data"]
     assert "id" in recipe
     assert "title" in recipe
     assert "created_at" in recipe
@@ -41,20 +45,25 @@ def test_create_and_get_recipe(client, clean_storage, sample_recipe_data):
     # Get recipe
     get_response = client.get(f"/api/recipes/{recipe['id']}")
     assert get_response.status_code == 200
-    assert get_response.json()["id"] == recipe["id"]
+    get_data = get_response.json()
+    assert get_data["success"] is True
+    assert get_data["data"]["id"] == recipe["id"]
 
 
 def test_recipe_not_found(client, clean_storage):
     """Contract test: Non-existent recipe returns 404"""
-    response = client.get("/api/recipes/non-existent-id")
+    response = client.get("/api/recipes/550e8400-e29b-41d4-a716-446655440000")
     assert response.status_code == 404
+    data = response.json()
+    assert data["error"] is True
 
 
 def test_recipe_pages_load(client, clean_storage, sample_recipe_data):
     """Smoke test: Recipe HTML pages load without error"""
     # Create a recipe first
     create_response = client.post("/api/recipes", json=sample_recipe_data)
-    recipe_id = create_response.json()["id"]
+    create_data = create_response.json()
+    recipe_id = create_data["data"]["id"]
     
     # Test recipe detail page
     response = client.get(f"/recipes/{recipe_id}")
