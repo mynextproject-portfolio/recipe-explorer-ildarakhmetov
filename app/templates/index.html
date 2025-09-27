@@ -47,7 +47,7 @@
                     <p class="card-text">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
                     <div class="mb-2">
                         <small class="text-muted">
-                            <strong>Region:</strong> {{ recipe.region }}
+                            <strong>Region:</strong> {{ recipe.region }} • <strong>Cuisine:</strong> {{ recipe.cuisine }}
                         </small>
                     </div>
                     {% if recipe.tags %}

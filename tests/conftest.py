@@ -30,5 +30,6 @@ def sample_recipe_data():
         "ingredients": ["ingredient 1", "ingredient 2"],
         "instructions": ["step 1", "step 2"],
         "tags": ["test"],
-        "region": "Test Region"
+        "region": "Test Region",
+        "cuisine": "Test Cuisine"
     }

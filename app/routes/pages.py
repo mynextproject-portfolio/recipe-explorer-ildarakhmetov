@@ -65,6 +65,7 @@ def create_recipe_form(
     title: str = Form(...),
     description: str = Form(...),
     region: str = Form(...),
+    cuisine: str = Form(...),
     ingredients: str = Form(...),
     instructions: str = Form(...),
     tags: str = Form(...)
@@ -88,6 +89,7 @@ def create_recipe_form(
             title=title,
             description=description,
             region=region,
+            cuisine=cuisine,
             ingredients=ingredient_list,
             instructions=instruction_list,
             tags=tag_list
@@ -112,6 +114,7 @@ def update_recipe_form(
     title: str = Form(...),
     description: str = Form(...),
     region: str = Form(...),
+    cuisine: str = Form(...),
     ingredients: str = Form(...),
     instructions: str = Form(...),
     tags: str = Form(...)
@@ -134,6 +137,7 @@ def update_recipe_form(
             title=title,
             description=description,
             region=region,
+            cuisine=cuisine,
             ingredients=ingredient_list,
             instructions=instruction_list,
             tags=tag_list

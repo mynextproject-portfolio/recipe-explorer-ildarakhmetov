@@ -9,6 +9,34 @@ recipe_view_count = {}
 class RecipeStorage:
     def __init__(self):
         self.recipes: Dict[str, Recipe] = {}
+        # Add hardcoded test recipe for testing new schema
+        self._add_default_test_recipe()
+    
+    def _add_default_test_recipe(self):
+        """Add a hardcoded test recipe demonstrating the new schema"""
+        test_recipe = Recipe(
+            id="test-recipe-schema-001",
+            title="Test Recipe - Jamie Chen Schema Update",
+            description="A test recipe to validate the new schema with cuisine field, instructions as array, and no difficulty field.",
+            ingredients=[
+                "2 cups test ingredient A",
+                "1 cup test ingredient B", 
+                "3 tablespoons test seasoning",
+                "Salt and pepper to taste"
+            ],
+            instructions=[
+                "Prepare all ingredients by washing and chopping as needed.",
+                "Heat oil in a large pan over medium heat.",
+                "Add ingredient A and cook for 5 minutes, stirring occasionally.",
+                "Mix in ingredient B and test seasoning.",
+                "Season with salt and pepper, cook for another 3 minutes.",
+                "Serve immediately while hot."
+            ],
+            tags=["test", "schema-validation", "quick"],
+            region="Test Region",
+            cuisine="Test Cuisine"
+        )
+        self.recipes[test_recipe.id] = test_recipe
     
     def get_all_recipes(self) -> List[Recipe]:
         return list(self.recipes.values())

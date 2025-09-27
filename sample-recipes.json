@@ -25,6 +25,7 @@
     ],
     "tags": ["comfort food", "Canadian", "vegetarian-friendly"],
     "region": "Canada",
+    "cuisine": "Canadian",
     "created_at": "2024-01-15T10:30:00",
     "updated_at": "2024-01-15T10:30:00"
   },
@@ -57,6 +58,7 @@
     ],
     "tags": ["Russian", "layered salad", "New Year", "festive", "make-ahead"],
     "region": "Russia",
+    "cuisine": "Russian",
     "created_at": "2024-01-20T14:45:00",
     "updated_at": "2024-01-20T14:45:00"
   },
@@ -94,6 +96,7 @@
     ],
     "tags": ["Chinese", "sweet and sour", "crispy", "Northeast Chinese", "stir-fry"],
     "region": "China",
+    "cuisine": "Chinese",
     "created_at": "2024-01-25T09:15:00",
     "updated_at": "2024-01-25T09:15:00"
   }
