@@ -22,8 +22,14 @@
                 <h6>Region</h6>
                 <p>{{ recipe.region }}</p>
             </div>
-            {% if recipe.tags %}
             <div class="col-md-6">
+                <h6>Cuisine</h6>
+                <p>{{ recipe.cuisine }}</p>
+            </div>
+        </div>
+        {% if recipe.tags %}
+        <div class="row mb-4">
+            <div class="col-md-12">
                 <h6>Tags</h6>
                 <div>
                     {% for tag in recipe.tags %}
@@ -31,7 +37,7 @@
                     {% endfor %}
                 </div>
             </div>
-            {% endif %}
+        {% endif %}
         </div>
         
         <hr>

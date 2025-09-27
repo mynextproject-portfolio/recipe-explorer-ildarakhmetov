@@ -35,9 +35,15 @@
             </div>
             
             <div class="mb-3">
-                <label for="region" class="form-label">Region/Cuisine</label>
+                <label for="region" class="form-label">Region</label>
                 <input type="text" class="form-control" id="region" name="region" 
                        value="{% if recipe %}{{ recipe.region }}{% endif %}" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="cuisine" class="form-label">Cuisine Type</label>
+                <input type="text" class="form-control" id="cuisine" name="cuisine" 
+                       value="{% if recipe %}{{ recipe.cuisine }}{% endif %}" required>
             </div>
             
             <div class="mb-3">

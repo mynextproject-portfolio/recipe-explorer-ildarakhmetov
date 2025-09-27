@@ -15,6 +15,7 @@ class Recipe(BaseModel):
     instructions: List[str]
     tags: List[str] = Field(default_factory=list)
     region: str
+    cuisine: str
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     # Future fields?
@@ -36,6 +37,7 @@ class RecipeCreate(BaseModel):
     instructions: List[str]
     tags: List[str] = Field(default_factory=list)
     region: str
+    cuisine: str
 
 
 class RecipeUpdate(BaseModel):
@@ -45,3 +47,4 @@ class RecipeUpdate(BaseModel):
     instructions: List[str]
     tags: List[str]
     region: str
+    cuisine: str
