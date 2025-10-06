@@ -10,6 +10,7 @@ from datetime import datetime
 from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
 from app.services.themealdb_adapter import themealdb_adapter
+from app.services.metrics import PerformanceTimer, metrics_collector
 from app.validation import (
     RecipeValidator, validate_recipe_id, validate_search_query, validate_import_data
 )
@@ -28,6 +29,9 @@ router = APIRouter(prefix="/api")
 @router.get("/recipes")
 async def get_recipes(search: Optional[str] = None):
     """Get all recipes or search by title with validation - combines internal and external sources"""
+    request_timer = PerformanceTimer("api/get_recipes")
+    request_timer.__enter__()
+    
     try:
         # Validate search query if provided
         if search is not None:
@@ -35,8 +39,17 @@ async def get_recipes(search: Optional[str] = None):
             if not validation_result.is_valid:
                 return create_validation_error_response(validation_result)
         
+        # Track timing for internal and external operations
+        timing_data = {}
+        
         # Execute search or get all from internal storage
         if search:
+            # Get recent metrics before making calls
+            recent_internal_metrics = [m for m in metrics_collector.get_recent_metrics(10) 
+                                      if m["operation_type"] == "internal"]
+            recent_external_metrics = [m for m in metrics_collector.get_recent_metrics(10) 
+                                      if m["operation_type"] == "external"]
+            
             internal_recipes = recipe_storage.search_recipes(search)
             logger.info(f"Search query '{search}' returned {len(internal_recipes)} internal recipes")
             
@@ -57,14 +70,33 @@ async def get_recipes(search: Optional[str] = None):
             
             # Combine results
             all_recipes = internal_recipes + external_recipes
+            
+            # Get the timing for this request's operations
+            new_internal_metrics = [m for m in metrics_collector.get_recent_metrics(10) 
+                                   if m["operation_type"] == "internal" and m not in recent_internal_metrics]
+            new_external_metrics = [m for m in metrics_collector.get_recent_metrics(10) 
+                                   if m["operation_type"] == "external" and m not in recent_external_metrics]
+            
+            if new_internal_metrics:
+                timing_data["internal_query_ms"] = new_internal_metrics[-1]["duration_ms"]
+            if new_external_metrics:
+                timing_data["external_api_ms"] = new_external_metrics[-1]["duration_ms"]
         else:
             # For non-search requests, only return internal recipes
             all_recipes = recipe_storage.get_all_recipes()
             logger.info(f"Retrieved all internal recipes: {len(all_recipes)} found")
+            
+            # Get timing for internal operation
+            recent_metrics = metrics_collector.get_recent_metrics(1)
+            if recent_metrics:
+                timing_data["internal_query_ms"] = recent_metrics[-1]["duration_ms"]
         
         # Count by source
         internal_count = sum(1 for r in all_recipes if r.source == "internal")
         external_count = sum(1 for r in all_recipes if r.source == "external")
+        
+        request_timer.__exit__(None, None, None)
+        timing_data["total_request_ms"] = request_timer.get_duration_ms()
         
         return create_success_response(
             data={"recipes": all_recipes},
@@ -74,7 +106,8 @@ async def get_recipes(search: Optional[str] = None):
                 "internal_count": internal_count,
                 "external_count": external_count,
                 "search_query": search if search else None,
-                "has_search": search is not None
+                "has_search": search is not None,
+                "performance": timing_data
             }
         )
     
@@ -437,3 +470,65 @@ async def import_recipes(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error importing recipes from {file.filename}: {str(e)}")
         return create_server_error_response("Failed to import recipes")
+
+
+@router.get("/metrics")
+def get_metrics():
+    """Get performance metrics for internal queries and external API calls"""
+    try:
+        stats = metrics_collector.get_statistics()
+        recent_metrics = metrics_collector.get_recent_metrics(50)
+        
+        # Calculate performance comparison
+        performance_comparison = {}
+        if stats["internal_avg_ms"] > 0 and stats["external_avg_ms"] > 0:
+            if stats["internal_avg_ms"] < stats["external_avg_ms"]:
+                speedup = stats["external_avg_ms"] / stats["internal_avg_ms"]
+                performance_comparison = {
+                    "faster_source": "internal",
+                    "speedup_factor": round(speedup, 2),
+                    "message": f"Internal queries are {speedup:.2f}x faster than external API calls"
+                }
+            else:
+                speedup = stats["internal_avg_ms"] / stats["external_avg_ms"]
+                performance_comparison = {
+                    "faster_source": "external",
+                    "speedup_factor": round(speedup, 2),
+                    "message": f"External API calls are {speedup:.2f}x faster than internal queries"
+                }
+        
+        return create_success_response(
+            data={
+                "statistics": stats,
+                "recent_metrics": recent_metrics,
+                "performance_comparison": performance_comparison
+            },
+            message="Performance metrics retrieved successfully",
+            meta={
+                "total_operations": stats["total_operations"],
+                "internal_operations": stats["internal_count"],
+                "external_operations": stats["external_count"]
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Error retrieving metrics: {str(e)}")
+        return create_server_error_response("Failed to retrieve metrics")
+
+
+@router.delete("/metrics")
+def clear_metrics():
+    """Clear all performance metrics"""
+    try:
+        metrics_collector.clear()
+        logger.info("Cleared all performance metrics")
+        
+        return create_success_response(
+            data={"cleared": True},
+            message="Performance metrics cleared successfully",
+            meta={"action": "clear_metrics"}
+        )
+    
+    except Exception as e:
+        logger.error(f"Error clearing metrics: {str(e)}")
+        return create_server_error_response("Failed to clear metrics")

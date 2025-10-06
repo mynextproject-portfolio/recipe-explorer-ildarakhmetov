@@ -7,6 +7,7 @@ import httpx
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from app.services.metrics import PerformanceTimer, metrics_collector
 
 logger = logging.getLogger(__name__)
 
@@ -45,44 +46,49 @@ class TheMealDBAdapter:
             logger.warning("Empty search query provided to TheMealDB adapter")
             return []
         
-        try:
-            client = await self._get_client()
-            url = f"{self.BASE_URL}/search.php"
-            params = {"s": query.strip()}
-            
-            logger.info(f"Searching TheMealDB API with query: {query}")
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            
-            data = response.json()
-            meals = data.get("meals", [])
-            
-            if not meals:
-                logger.info(f"No meals found in TheMealDB for query: {query}")
-                return []
-            
-            # Transform each meal to our internal schema
-            transformed_recipes = []
-            for meal in meals:
-                try:
-                    recipe = self._transform_meal_to_recipe(meal)
-                    transformed_recipes.append(recipe)
-                except Exception as e:
-                    logger.error(f"Error transforming meal {meal.get('idMeal')}: {str(e)}")
-                    continue
-            
-            logger.info(f"Successfully transformed {len(transformed_recipes)} meals from TheMealDB")
-            return transformed_recipes
+        with PerformanceTimer("external/search_meals") as timer:
+            try:
+                client = await self._get_client()
+                url = f"{self.BASE_URL}/search.php"
+                params = {"s": query.strip()}
+                
+                logger.info(f"Searching TheMealDB API with query: {query}")
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                
+                data = response.json()
+                meals = data.get("meals", [])
+                
+                if not meals:
+                    logger.info(f"No meals found in TheMealDB for query: {query}")
+                    result = []
+                else:
+                    # Transform each meal to our internal schema
+                    transformed_recipes = []
+                    for meal in meals:
+                        try:
+                            recipe = self._transform_meal_to_recipe(meal)
+                            transformed_recipes.append(recipe)
+                        except Exception as e:
+                            logger.error(f"Error transforming meal {meal.get('idMeal')}: {str(e)}")
+                            continue
+                    
+                    logger.info(f"Successfully transformed {len(transformed_recipes)} meals from TheMealDB")
+                    result = transformed_recipes
+                
+            except httpx.TimeoutException:
+                logger.error(f"Timeout while searching TheMealDB for query: {query}")
+                result = []
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error while searching TheMealDB: {str(e)}")
+                result = []
+            except Exception as e:
+                logger.error(f"Unexpected error searching TheMealDB: {str(e)}")
+                result = []
         
-        except httpx.TimeoutException:
-            logger.error(f"Timeout while searching TheMealDB for query: {query}")
-            return []
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error while searching TheMealDB: {str(e)}")
-            return []
-        except Exception as e:
-            logger.error(f"Unexpected error searching TheMealDB: {str(e)}")
-            return []
+        metrics_collector.record("external", "search_meals", timer.get_duration_ms(),
+                                {"query": query, "result_count": len(result)})
+        return result
     
     async def get_meal_by_id(self, meal_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -98,37 +104,42 @@ class TheMealDBAdapter:
             logger.warning("Empty meal_id provided to TheMealDB adapter")
             return None
         
-        try:
-            client = await self._get_client()
-            url = f"{self.BASE_URL}/lookup.php"
-            params = {"i": meal_id}
-            
-            logger.info(f"Fetching meal {meal_id} from TheMealDB API")
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            
-            data = response.json()
-            meals = data.get("meals", [])
-            
-            if not meals or len(meals) == 0:
-                logger.warning(f"Meal {meal_id} not found in TheMealDB")
-                return None
-            
-            meal = meals[0]
-            recipe = self._transform_meal_to_recipe(meal)
-            
-            logger.info(f"Successfully retrieved and transformed meal {meal_id}")
-            return recipe
+        with PerformanceTimer("external/get_meal_by_id") as timer:
+            try:
+                client = await self._get_client()
+                url = f"{self.BASE_URL}/lookup.php"
+                params = {"i": meal_id}
+                
+                logger.info(f"Fetching meal {meal_id} from TheMealDB API")
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                
+                data = response.json()
+                meals = data.get("meals", [])
+                
+                if not meals or len(meals) == 0:
+                    logger.warning(f"Meal {meal_id} not found in TheMealDB")
+                    result = None
+                else:
+                    meal = meals[0]
+                    recipe = self._transform_meal_to_recipe(meal)
+                    
+                    logger.info(f"Successfully retrieved and transformed meal {meal_id}")
+                    result = recipe
+                
+            except httpx.TimeoutException:
+                logger.error(f"Timeout while fetching meal {meal_id} from TheMealDB")
+                result = None
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error while fetching meal {meal_id}: {str(e)}")
+                result = None
+            except Exception as e:
+                logger.error(f"Unexpected error fetching meal {meal_id}: {str(e)}")
+                result = None
         
-        except httpx.TimeoutException:
-            logger.error(f"Timeout while fetching meal {meal_id} from TheMealDB")
-            return None
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error while fetching meal {meal_id}: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error fetching meal {meal_id}: {str(e)}")
-            return None
+        metrics_collector.record("external", "get_meal_by_id", timer.get_duration_ms(),
+                                {"meal_id": meal_id, "found": result is not None})
+        return result
     
     def _transform_meal_to_recipe(self, meal: Dict[str, Any]) -> Dict[str, Any]:
         """
