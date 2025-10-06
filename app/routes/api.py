@@ -83,6 +83,69 @@ async def get_recipes(search: Optional[str] = None):
         return create_server_error_response("Failed to retrieve recipes")
 
 
+@router.get("/recipes/search")
+async def search_recipes_endpoint(q: Optional[str] = None):
+    """
+    Dedicated search endpoint that combines internal and external sources
+    Query parameter: q (search query)
+    """
+    try:
+        # Validate search query if provided
+        if q is not None and q.strip():
+            from app.validation import validate_search_query
+            validation_result = validate_search_query(q)
+            if not validation_result.is_valid:
+                return create_validation_error_response(validation_result)
+        
+        if not q or not q.strip():
+            return create_bad_request_error_response(
+                "Search query 'q' parameter is required",
+                {"parameter": "q", "provided": q}
+            )
+        
+        # Search internal recipes
+        internal_recipes = recipe_storage.search_recipes(q)
+        logger.info(f"Search query '{q}' returned {len(internal_recipes)} internal recipes")
+        
+        # Search external API
+        external_recipes_data = await themealdb_adapter.search_meals(q)
+        external_recipes = []
+        
+        # Convert external recipe dicts to Recipe objects
+        for recipe_data in external_recipes_data:
+            try:
+                recipe = Recipe(**recipe_data)
+                external_recipes.append(recipe)
+            except Exception as e:
+                logger.error(f"Error creating Recipe from external data: {str(e)}")
+                continue
+        
+        logger.info(f"Search query '{q}' returned {len(external_recipes)} external recipes")
+        
+        # Combine results
+        all_recipes = internal_recipes + external_recipes
+        
+        # Count by source
+        internal_count = sum(1 for r in all_recipes if r.source == "internal")
+        external_count = sum(1 for r in all_recipes if r.source == "external")
+        
+        return create_success_response(
+            data={"recipes": all_recipes},
+            message=f"Successfully retrieved {len(all_recipes)} recipes",
+            meta={
+                "count": len(all_recipes),
+                "internal_count": internal_count,
+                "external_count": external_count,
+                "search_query": q,
+                "has_search": True
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Error searching recipes: {str(e)}")
+        return create_server_error_response("Failed to search recipes")
+
+
 @router.get("/recipes/export")
 def export_recipes():
     """Export all recipes as JSON with proper response handling"""
