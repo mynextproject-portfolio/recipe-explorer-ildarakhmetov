@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 import uuid
 import re
 
@@ -20,6 +20,7 @@ class Recipe(BaseModel):
     tags: List[str] = Field(default_factory=list, max_length=MAX_TAGS, description="Optional tags (max 20)")
     region: str = Field(..., min_length=2, max_length=100, description="Geographic region (2-100 characters)")
     cuisine: str = Field(..., min_length=2, max_length=100, description="Cuisine type (2-100 characters)")
+    source: Literal["internal", "external"] = Field(default="internal", description="Recipe source: internal or external")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 

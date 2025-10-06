@@ -2,19 +2,43 @@ from fastapi import APIRouter, Request, Form, HTTPException, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import List, Optional
-from app.models import RecipeCreate, RecipeUpdate
+from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
+from app.services.themealdb_adapter import themealdb_adapter
+import logging
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, search: Optional[str] = None, message: Optional[str] = None):
-    """Home page with recipe list and search"""
+async def home(request: Request, search: Optional[str] = None, message: Optional[str] = None):
+    """Home page with recipe list and search - includes external TheMealDB results"""
     if search:
-        recipes = recipe_storage.search_recipes(search)
+        # Get internal recipes
+        internal_recipes = recipe_storage.search_recipes(search)
+        logger.info(f"Web search '{search}': Found {len(internal_recipes)} internal recipes")
+        
+        # Get external recipes from TheMealDB
+        external_recipes_data = await themealdb_adapter.search_meals(search)
+        external_recipes = []
+        
+        # Convert external recipe dicts to Recipe objects
+        for recipe_data in external_recipes_data:
+            try:
+                recipe = Recipe(**recipe_data)
+                external_recipes.append(recipe)
+            except Exception as e:
+                logger.error(f"Error creating Recipe from external data: {str(e)}")
+                continue
+        
+        logger.info(f"Web search '{search}': Found {len(external_recipes)} external recipes")
+        
+        # Combine results
+        recipes = internal_recipes + external_recipes
     else:
+        # For non-search requests, only show internal recipes
         recipes = recipe_storage.get_all_recipes()
     
     return templates.TemplateResponse(request, "index.html", {
@@ -34,11 +58,25 @@ def new_recipe_form(request: Request):
 
 
 @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
-def recipe_detail(request: Request, recipe_id: str, message: Optional[str] = None):
-    """Recipe detail page"""
+async def recipe_detail(request: Request, recipe_id: str, message: Optional[str] = None):
+    """Recipe detail page - checks both internal and external sources"""
+    # First try internal storage
     recipe = recipe_storage.get_recipe(recipe_id)
+    
+    # If not found internally, try TheMealDB (external source)
     if not recipe:
-        raise HTTPException(status_code=404, detail="Recipe not found")
+        logger.info(f"Recipe {recipe_id} not found internally, checking external API")
+        external_recipe_data = await themealdb_adapter.get_meal_by_id(recipe_id)
+        
+        if external_recipe_data:
+            try:
+                recipe = Recipe(**external_recipe_data)
+                logger.info(f"Found recipe {recipe_id} in external API")
+            except Exception as e:
+                logger.error(f"Error creating Recipe from external data: {str(e)}")
+                raise HTTPException(status_code=404, detail="Recipe not found")
+        else:
+            raise HTTPException(status_code=404, detail="Recipe not found")
     
     return templates.TemplateResponse(request, "recipe_detail.html", {
         "recipe": recipe,

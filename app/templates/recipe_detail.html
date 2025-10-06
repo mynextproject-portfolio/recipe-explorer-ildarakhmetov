@@ -14,7 +14,14 @@
 
 <div class="row">
     <div class="col-md-8">
-        <h1>{{ recipe.title }}</h1>
+        <h1>
+            {{ recipe.title }}
+            {% if recipe.source == "external" %}
+            <span class="badge bg-info text-dark ms-2" title="From TheMealDB">
+                <i class="bi bi-cloud"></i> External Recipe
+            </span>
+            {% endif %}
+        </h1>
         <p class="lead">{{ recipe.description }}</p>
         
         <div class="row mb-4">
@@ -64,6 +71,7 @@
     </div>
     
     <div class="col-md-4">
+        {% if recipe.source == "internal" %}
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Recipe Actions</h5>
@@ -80,11 +88,23 @@
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">External Recipe</h5>
+                <p class="text-muted">This recipe is from TheMealDB and cannot be edited or deleted.</p>
+                <a href="https://www.themealdb.com/" target="_blank" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-box-arrow-up-right"></i> Visit TheMealDB
+                </a>
+            </div>
+        </div>
+        {% endif %}
         
         <div class="card mt-3">
             <div class="card-body">
                 <h6 class="card-title">Recipe Info</h6>
                 <small class="text-muted">
+                    <div><strong>Source:</strong> {{ recipe.source|capitalize }}</div>
                     <div><strong>Created:</strong> {{ recipe.created_at.strftime('%B %d, %Y') }}</div>
                     <div><strong>Updated:</strong> {{ recipe.updated_at.strftime('%B %d, %Y') }}</div>
                     <div><strong>Ingredients:</strong> {{ recipe.ingredients|length }}</div>

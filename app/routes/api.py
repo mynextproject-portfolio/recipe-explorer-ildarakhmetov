@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.models import Recipe, RecipeCreate, RecipeUpdate
 from app.services.storage import recipe_storage
+from app.services.themealdb_adapter import themealdb_adapter
 from app.validation import (
     RecipeValidator, validate_recipe_id, validate_search_query, validate_import_data
 )
@@ -25,8 +26,8 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/recipes")
-def get_recipes(search: Optional[str] = None):
-    """Get all recipes or search by title with validation"""
+async def get_recipes(search: Optional[str] = None):
+    """Get all recipes or search by title with validation - combines internal and external sources"""
     try:
         # Validate search query if provided
         if search is not None:
@@ -34,19 +35,44 @@ def get_recipes(search: Optional[str] = None):
             if not validation_result.is_valid:
                 return create_validation_error_response(validation_result)
         
-        # Execute search or get all
+        # Execute search or get all from internal storage
         if search:
-            recipes = recipe_storage.search_recipes(search)
-            logger.info(f"Search query '{search}' returned {len(recipes)} recipes")
+            internal_recipes = recipe_storage.search_recipes(search)
+            logger.info(f"Search query '{search}' returned {len(internal_recipes)} internal recipes")
+            
+            # Also search external API
+            external_recipes_data = await themealdb_adapter.search_meals(search)
+            external_recipes = []
+            
+            # Convert external recipe dicts to Recipe objects
+            for recipe_data in external_recipes_data:
+                try:
+                    recipe = Recipe(**recipe_data)
+                    external_recipes.append(recipe)
+                except Exception as e:
+                    logger.error(f"Error creating Recipe from external data: {str(e)}")
+                    continue
+            
+            logger.info(f"Search query '{search}' returned {len(external_recipes)} external recipes")
+            
+            # Combine results
+            all_recipes = internal_recipes + external_recipes
         else:
-            recipes = recipe_storage.get_all_recipes()
-            logger.info(f"Retrieved all recipes: {len(recipes)} found")
+            # For non-search requests, only return internal recipes
+            all_recipes = recipe_storage.get_all_recipes()
+            logger.info(f"Retrieved all internal recipes: {len(all_recipes)} found")
+        
+        # Count by source
+        internal_count = sum(1 for r in all_recipes if r.source == "internal")
+        external_count = sum(1 for r in all_recipes if r.source == "external")
         
         return create_success_response(
-            data={"recipes": recipes},
-            message=f"Successfully retrieved {len(recipes)} recipes",
+            data={"recipes": all_recipes},
+            message=f"Successfully retrieved {len(all_recipes)} recipes",
             meta={
-                "count": len(recipes),
+                "count": len(all_recipes),
+                "internal_count": internal_count,
+                "external_count": external_count,
                 "search_query": search if search else None,
                 "has_search": search is not None
             }
@@ -100,9 +126,71 @@ def export_recipes():
         return create_server_error_response("Failed to export recipes")
 
 
+@router.get("/recipes/internal/{recipe_id}")
+def get_internal_recipe(recipe_id: str):
+    """Get a specific internal recipe by ID with validation"""
+    try:
+        # Validate recipe ID format
+        validation_result = validate_recipe_id(recipe_id)
+        if not validation_result.is_valid:
+            return create_validation_error_response(validation_result)
+        
+        # Get recipe from storage
+        recipe = recipe_storage.get_recipe(recipe_id)
+        if not recipe:
+            return create_not_found_error_response("Internal recipe", recipe_id)
+        
+        logger.info(f"Retrieved internal recipe: {recipe_id}")
+        
+        return create_success_response(
+            data=recipe,
+            message="Internal recipe retrieved successfully",
+            meta={"recipe_id": recipe_id, "source": "internal"}
+        )
+    
+    except Exception as e:
+        logger.error(f"Error retrieving internal recipe {recipe_id}: {str(e)}")
+        return create_server_error_response("Failed to retrieve internal recipe")
+
+
+@router.get("/recipes/external/{recipe_id}")
+async def get_external_recipe(recipe_id: str):
+    """Get a specific external recipe by ID from TheMealDB"""
+    try:
+        # Validate recipe ID format
+        validation_result = validate_recipe_id(recipe_id)
+        if not validation_result.is_valid:
+            return create_validation_error_response(validation_result)
+        
+        # Get recipe from external API
+        recipe_data = await themealdb_adapter.get_meal_by_id(recipe_id)
+        
+        if not recipe_data:
+            return create_not_found_error_response("External recipe", recipe_id)
+        
+        # Convert to Recipe object
+        try:
+            recipe = Recipe(**recipe_data)
+        except Exception as e:
+            logger.error(f"Error creating Recipe from external data: {str(e)}")
+            return create_server_error_response("Failed to process external recipe data")
+        
+        logger.info(f"Retrieved external recipe: {recipe_id}")
+        
+        return create_success_response(
+            data=recipe,
+            message="External recipe retrieved successfully",
+            meta={"recipe_id": recipe_id, "source": "external"}
+        )
+    
+    except Exception as e:
+        logger.error(f"Error retrieving external recipe {recipe_id}: {str(e)}")
+        return create_server_error_response("Failed to retrieve external recipe")
+
+
 @router.get("/recipes/{recipe_id}")
 def get_recipe(recipe_id: str):
-    """Get a specific recipe by ID with validation"""
+    """Get a specific recipe by ID with validation (deprecated - use /internal or /external endpoints)"""
     try:
         # Validate recipe ID format
         validation_result = validate_recipe_id(recipe_id)
