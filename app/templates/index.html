@@ -43,7 +43,14 @@
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">{{ recipe.title }}</h5>
+                    <h5 class="card-title">
+                        {{ recipe.title }}
+                        {% if recipe.source == "external" %}
+                        <span class="badge bg-info text-dark ms-2" title="From TheMealDB">
+                            <i class="bi bi-cloud"></i> External
+                        </span>
+                        {% endif %}
+                    </h5>
                     <p class="card-text">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
                     <div class="mb-2">
                         <small class="text-muted">
@@ -66,7 +73,11 @@
                 </div>
                 <div class="card-footer bg-transparent">
                     <a href="/recipes/{{ recipe.id }}" class="btn btn-primary btn-sm">View Recipe</a>
+                    {% if recipe.source == "internal" %}
                     <a href="/recipes/{{ recipe.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                    {% else %}
+                    <span class="text-muted small">External recipes cannot be edited</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
