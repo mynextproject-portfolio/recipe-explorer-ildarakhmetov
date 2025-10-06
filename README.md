@@ -42,6 +42,52 @@ pytest           # Run all tests
 pytest -v        # Verbose output
 ```
 
+## Performance Metrics
+
+The API automatically measures and reports response times for internal database queries vs external TheMealDB API calls.
+
+### Features
+
+- **Automatic Timing**: All database queries and external API calls are automatically timed
+- **Performance Metadata**: API responses include timing data in the `meta.performance` field
+- **Metrics Endpoint**: Access aggregated statistics at `GET /api/metrics`
+- **Performance Comparison**: See which data source (internal/external) is faster
+
+### Example Response with Metrics
+
+```json
+{
+  "success": true,
+  "data": {
+    "recipes": [...]
+  },
+  "meta": {
+    "count": 5,
+    "internal_count": 2,
+    "external_count": 3,
+    "performance": {
+      "internal_query_ms": 0.25,
+      "external_api_ms": 145.32,
+      "total_request_ms": 156.78
+    }
+  }
+}
+```
+
+### Viewing Metrics
+
+Access the metrics endpoint to see aggregated statistics:
+
+```bash
+curl http://localhost:8000/api/metrics
+```
+
+This shows:
+- Average response times for internal vs external sources
+- Per-operation statistics (min/max/avg)
+- Performance comparison and speedup factors
+- Recent operation history
+
 ## API Endpoints
 
 **Pages:**
@@ -51,13 +97,15 @@ pytest -v        # Verbose output
 - `/import` - Import recipes
 
 **API:**
-- `GET /api/recipes` - List/search recipes
+- `GET /api/recipes` - List/search recipes (includes performance metrics in response)
 - `POST /api/recipes` - Create recipe
 - `GET /api/recipes/{id}` - Get recipe
 - `PUT /api/recipes/{id}` - Update recipe
 - `DELETE /api/recipes/{id}` - Delete recipe
 - `POST /api/recipes/import` - Import JSON
 - `GET /api/recipes/export` - Export JSON
+- `GET /api/metrics` - View performance metrics
+- `DELETE /api/metrics` - Clear performance metrics
 
 ---
 
